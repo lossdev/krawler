@@ -8,7 +8,14 @@ import (
 )
 
 const (
+	DefaultFormat = iota
+	JsonFormat
+	YamlFormat
+)
+
+const (
 	DepthDescription    = "Depth level to crawl to. 0 = full crawl, 1 = root level ( / ) crawl"
+	FormatDescription   = "Output data in JSON or YAML format"
 	InsecureDescription = "Crawl sites with problematic SSL certificates (self-signed, unknown, expired, etc)"
 	MimeDescription     = "Include MIME type information with page scrape"
 	OutputDescription   = "Output data to a file"
@@ -23,6 +30,8 @@ func GetHelpString() string {
 	str := fmt.Sprintf("Usage of %s:\n", os.Args[0])
 	str = fmt.Sprintf("%s  -d, -depth, --depth [number]\n", str)
 	str = fmt.Sprintf("%s      %s\n", str, DepthDescription)
+	str = fmt.Sprintf("%s  -f, -format, --format (json | yaml)\n", str)
+	str = fmt.Sprintf("%s      %s\n", str, FormatDescription)
 	str = fmt.Sprintf("%s  -i, -insecure, --insecure\n", str)
 	str = fmt.Sprintf("%s      %s\n", str, InsecureDescription)
 	str = fmt.Sprintf("%s  -m, -mime, --mime\n", str)
