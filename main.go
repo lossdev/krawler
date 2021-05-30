@@ -17,8 +17,8 @@ func main() {
 	setupFlags(flag.CommandLine)
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	var depth int
-	flag.IntVar(&depth, "d", 3, cmdline.DepthDescription)
-	flag.IntVar(&depth, "depth", 3, cmdline.DepthDescription)
+	flag.IntVar(&depth, "d", 1, cmdline.DepthDescription)
+	flag.IntVar(&depth, "depth", 1, cmdline.DepthDescription)
 	var dataFormat string
 	flag.StringVar(&dataFormat, "f", "", cmdline.FormatDescription)
 	flag.StringVar(&dataFormat, "format", "", cmdline.FormatDescription)
