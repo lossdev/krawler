@@ -5,6 +5,7 @@ package krawl
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,17 +20,38 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/bobesa/go-domain-util/domainutil"
 	"golang.org/x/net/html"
+	"sigs.k8s.io/yaml"
+
+	"krawler/cmdline"
 )
+
+type jsonSuperParent struct {
+	Links []jsonParent
+}
+
+type jsonParent struct {
+	Depth   int      `json:"depth"`
+	NewLink linkInfo `json:"newLink"`
+}
+
+type linkInfo struct {
+	Link        string `json:"link"`
+	ParentLink  string `json:"parentLink"`
+	ContentType string `json:"contentType,omitempty"`
+	Content     string `json:"content"`
+}
 
 var (
 	c            *http.Client
 	fileHandler  *os.File
+	format       int
 	visitedLinks = make(map[string]bool)
 	tld          string
 	subdomain    string
+	foundLinks   []jsonParent
 )
 
-func Init(insecure bool, timeout int, outputFile string) error {
+func Init(insecure bool, timeout int, outputFile string, f int) error {
 	// set up HTTP client
 	if insecure {
 		tr := &http.Transport{
@@ -55,6 +77,8 @@ func Init(insecure bool, timeout int, outputFile string) error {
 	} else {
 		fileHandler = os.Stderr
 	}
+
+	format = f
 	return nil
 }
 
@@ -99,6 +123,7 @@ func Krawl(pageUrl string, parentLink string, desiredDepth int, currentDepth int
 	// "http://foo.com/bar/bat"
 
 	curPageUrlStruct, err := url.Parse(pageUrl)
+	curPageUrlStruct = stripUrlFragments(curPageUrlStruct)
 	if err != nil {
 		log.Printf("Error parsing current page URL %s: %s\n", pageUrl, err)
 		return
@@ -118,13 +143,6 @@ func Krawl(pageUrl string, parentLink string, desiredDepth int, currentDepth int
 		return
 	}
 	contentType := strings.Split(resp.Header.Get("Content-Type"), ";")[0]
-
-	fmt.Fprintf(fileHandler, "--------------------------\nURL: %s\n", pageUrl)
-	fmt.Fprintf(fileHandler, "Parent Link: %s\n", parentLink)
-	fmt.Fprintf(fileHandler, "Content-Type: %s\n", contentType)
-	fmt.Fprintf(fileHandler, "Depth: %d\n", currentDepth)
-	fmt.Fprintf(fileHandler, "--------------------------\n")
-
 	if contentType != "text/html" {
 		return
 	} else {
@@ -133,10 +151,15 @@ func Krawl(pageUrl string, parentLink string, desiredDepth int, currentDepth int
 			pageUrl += "/"
 		}
 		curPageUrlStruct, err = url.Parse(pageUrl)
+		curPageUrlStruct = stripUrlFragments(curPageUrlStruct)
 		if err != nil {
-			log.Printf("Error parsing current page URL: %s: %s\n", pageUrl, err)
+			log.Printf("Error parsing current page URL %s: %s\n", pageUrl, err)
 			return
 		}
+	}
+	// set contentType as empty string if the mime option isn't enabled
+	if !mimeScrape {
+		contentType = ""
 	}
 
 	doc, reader, err := getGoqueryDoc(pageUrl)
@@ -147,6 +170,7 @@ func Krawl(pageUrl string, parentLink string, desiredDepth int, currentDepth int
 	domTokens := html.NewTokenizer(reader)
 	previousToken := domTokens.Token()
 
+	var content string
 tokenLoop:
 	for {
 		tt := domTokens.Next()
@@ -166,16 +190,19 @@ tokenLoop:
 			if _, ok := m[previousToken.Data]; ok {
 				continue
 			}
-			content := strings.TrimSpace(html.UnescapeString(string(domTokens.Text())))
-			if len(content) > 0 {
-				fmt.Fprintf(fileHandler, "%s\n", content)
+			tmp := strings.TrimSpace(html.UnescapeString(string(domTokens.Text())))
+			if len(tmp) != 0 {
+				if string(tmp[len(tmp)-1]) != "\n" {
+					tmp += "\n"
+				}
 			}
+			content += tmp
 		}
 	}
+	content = strings.TrimRight(content, "\n")
 
-	// if current depth is equal to desired depth, return and don't find new links
-	if currentDepth == desiredDepth {
-		fmt.Fprintf(fileHandler, "--------------------------\n\n")
+	serializeOut(pageUrl, parentLink, contentType, currentDepth, content)
+	if currentDepth == desiredDepth && desiredDepth != 0 {
 		return
 	}
 
@@ -191,6 +218,7 @@ tokenLoop:
 			log.Printf("Error parsing found URL %s: %s\n", foundLink, err)
 			return
 		}
+		foundUrlStruct = stripUrlFragments(foundUrlStruct)
 		resolvedLink := curPageUrlStruct.ResolveReference(foundUrlStruct).String()
 
 		foundLinkTld := domainutil.Domain(resolvedLink)
@@ -198,11 +226,12 @@ tokenLoop:
 
 		if (foundLinkTld == tld) && (foundLinkSD == subdomain) && (resolvedLink != pageUrl) {
 			// valid link to follow
-			fmt.Fprintf(fileHandler, "Found link: %s\n", resolvedLink)
+			if format == cmdline.DefaultFormat {
+				fmt.Fprintf(fileHandler, "> Found new link: %s\n", resolvedLink)
+			}
 			links = append(links, resolvedLink)
 		}
 	})
-	fmt.Fprintf(fileHandler, "--------------------------\n\n")
 
 	for i := 0; i < len(links); i++ {
 		Krawl(links[i], pageUrl, desiredDepth, currentDepth+1, mimeScrape)
@@ -227,4 +256,48 @@ func getGoqueryDoc(link string) (*goquery.Document, io.Reader, error) {
 		return nil, nil, err
 	}
 	return doc, reader, nil
+}
+
+func stripUrlFragments(u *url.URL) *url.URL {
+	// strip any key-value (?key=value) and id selectors (#something) from URL
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u
+}
+
+func serializeOut(curLink string, parentLink string, contentType string, depth int, content string) {
+	if format == cmdline.DefaultFormat {
+		fmt.Fprintf(fileHandler, "--------------------------\nURL: %s\n", curLink)
+		fmt.Fprintf(fileHandler, "Parent Link: %s\n", parentLink)
+		fmt.Fprintf(fileHandler, "Content-Type: %s\n", contentType)
+		fmt.Fprintf(fileHandler, "Depth: %d\n", depth)
+		fmt.Fprintf(fileHandler, "--------------------------\n")
+		fmt.Fprintf(fileHandler, "%s\n--------------------------\n", content)
+	} else {
+		foundLinks = append(foundLinks, jsonParent{depth, linkInfo{curLink, parentLink, contentType, content}})
+	}
+}
+
+func FlushJson() {
+	var data []byte
+	var err error
+	if format == cmdline.JsonFormat {
+		if fileHandler == os.Stderr {
+			data, err = json.MarshalIndent(foundLinks, "", "  ")
+		} else {
+			data, err = json.Marshal(foundLinks)
+		}
+		if err != nil {
+			log.Printf("Error marshaling json: %s\n", err)
+			return
+		}
+	} else if format == cmdline.YamlFormat {
+		data, err = yaml.Marshal(foundLinks)
+		if err != nil {
+			log.Printf("Error marshaling yaml: %s\n", err)
+			return
+		}
+	}
+
+	fmt.Fprintf(fileHandler, string(data))
 }
