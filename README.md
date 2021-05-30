@@ -11,7 +11,22 @@ make
 make install
 ```
 
-### Usage
+### Compiled Binary
+
+Compiled binaries are available for the following platforms:
+
+* macOS
+  * [amd64](https://github.com/lossdev/krawler/releases/download/v1.0.0/krawler-macos-amd64)
+  * [arm64](https://github.com/lossdev/krawler/releases/download/v1.0.0/krawler-macos-arm64)
+* Linux
+  * [amd64](https://github.com/lossdev/krawler/releases/download/v1.0.0/krawler-linux-amd64)
+  * [i386](https://github.com/lossdev/krawler/releases/download/v1.0.0/krawler-linux-i386)
+  * [arm64](https://github.com/lossdev/krawler/releases/download/v1.0.0/krawler-linux-arm64)
+* Windows
+  * [amd64](https://github.com/lossdev/krawler/releases/download/v1.0.0/krawler-windows-amd64)
+  * [i386](https://github.com/lossdev/krawler/releases/download/v1.0.0/krawler-windows-i386)
+
+## Usage
 
 Executing `krawler`, `krawler -h`, `krawler -help`, or `krawler --help` will prompt you with the available options.
 ```bash
@@ -37,10 +52,10 @@ Usage of krawler:
 [lossdev@foo ~]
 ```
 
-#### Required Options
+### Required Options
 The only required option is the seed URL parameter (`-u`, `-url`, or `--url`). All others are optional.
 
-#### Other Options
+### Other Options
 * `-d, -depth, --depth [number]`
 
 The depth parameter for how far `krawler` will go relative to the seed URL before stopping. A `0` argument will instruct krawler to crawl as far deep as the site
