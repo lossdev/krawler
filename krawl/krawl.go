@@ -269,7 +269,9 @@ func serializeOut(curLink string, parentLink string, contentType string, depth i
 	if format == cmdline.DefaultFormat {
 		fmt.Fprintf(fileHandler, "--------------------------\nURL: %s\n", curLink)
 		fmt.Fprintf(fileHandler, "Parent Link: %s\n", parentLink)
-		fmt.Fprintf(fileHandler, "Content-Type: %s\n", contentType)
+		if contentType != "" {
+			fmt.Fprintf(fileHandler, "Content-Type: %s\n", contentType)
+		}
 		fmt.Fprintf(fileHandler, "Depth: %d\n", depth)
 		fmt.Fprintf(fileHandler, "--------------------------\n")
 		fmt.Fprintf(fileHandler, "%s\n--------------------------\n", content)
