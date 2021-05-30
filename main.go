@@ -19,6 +19,9 @@ func main() {
 	var depth int
 	flag.IntVar(&depth, "d", 3, cmdline.DepthDescription)
 	flag.IntVar(&depth, "depth", 3, cmdline.DepthDescription)
+	var dataFormat string
+	flag.StringVar(&dataFormat, "f", "", cmdline.FormatDescription)
+	flag.StringVar(&dataFormat, "format", "", cmdline.FormatDescription)
 	var insecure bool
 	flag.BoolVar(&insecure, "i", false, cmdline.InsecureDescription)
 	flag.BoolVar(&insecure, "insecure", false, cmdline.InsecureDescription)
@@ -40,6 +43,7 @@ func main() {
 
 	flag.Parse()
 
+	// check options
 	if help {
 		fmt.Fprintf(os.Stderr, cmdline.GetHelpString())
 		exit()
@@ -54,6 +58,7 @@ func main() {
 			fmt.Scanln(&inp)
 			inp = strings.ToLower(inp)
 			if inp != "y" && inp != "yes" {
+				fmt.Printf("File \"%s\" will not be overwritten. Exiting\n", outputFile)
 				exit()
 			}
 		} else if errors.Is(err, os.ErrNotExist) {
@@ -64,7 +69,17 @@ func main() {
 		}
 	}
 
-	err := krawl.Init(insecure, timeout, outputFile)
+	var format = cmdline.DefaultFormat
+	if len(dataFormat) != 0 {
+		tmp := strings.ToLower(dataFormat)
+		if tmp == "json" {
+			format = cmdline.JsonFormat
+		} else if tmp == "yaml" {
+			format = cmdline.YamlFormat
+		}
+	}
+
+	err := krawl.Init(insecure, timeout, outputFile, format)
 	if err != nil {
 		log.Printf("Error initializing krawler: %s\n", err)
 		exit()
@@ -92,6 +107,9 @@ func main() {
 	}
 
 	krawl.Krawl(tld, "--", depth, 1, mimeScrape)
+	if format != cmdline.DefaultFormat {
+		krawl.FlushJson()
+	}
 }
 
 func setupFlags(f *flag.FlagSet) {
